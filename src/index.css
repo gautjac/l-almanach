@@ -1,0 +1,73 @@
+@tailwind base;
+@tailwind components;
+@tailwind utilities;
+
+:root {
+  /* Defaults (spring) — re-tinted at runtime by applyPalette(). */
+  --alm-bg: 243 246 238;
+  --alm-surface: 252 253 248;
+  --alm-line: 210 222 200;
+  --alm-ink: 44 58 44;
+  --alm-muted: 108 130 108;
+  --alm-accent: 76 130 82;
+  --alm-accent-soft: 150 188 150;
+  --alm-gild: 203 160 74;
+  color-scheme: light;
+}
+
+html,
+body,
+#root {
+  height: 100%;
+}
+
+body {
+  margin: 0;
+  background-color: rgb(var(--alm-bg));
+  color: rgb(var(--alm-ink));
+  font-family: "Inter", system-ui, sans-serif;
+  -webkit-font-smoothing: antialiased;
+  text-rendering: optimizeLegibility;
+  /* a gentle paper grain + season-tinted vignette */
+  background-image:
+    radial-gradient(120% 80% at 50% -10%, rgb(var(--alm-accent-soft) / 0.18), transparent 60%),
+    radial-gradient(100% 60% at 50% 120%, rgb(var(--alm-accent) / 0.08), transparent 70%);
+  background-attachment: fixed;
+  transition: background-color 0.8s ease, color 0.8s ease;
+}
+
+/* Smooth the whole palette swap when the season changes. */
+.alm-transition,
+.alm-transition * {
+  transition-property: background-color, border-color, color, fill, stroke;
+  transition-duration: 0.7s;
+  transition-timing-function: ease;
+}
+
+.haiku {
+  white-space: pre-line;
+  font-family: "Cormorant Garamond", Georgia, serif;
+}
+
+/* Custom scrollbar for the year-wheel drawer etc. */
+::-webkit-scrollbar {
+  width: 10px;
+  height: 10px;
+}
+::-webkit-scrollbar-thumb {
+  background: rgb(var(--alm-line));
+  border-radius: 999px;
+}
+::-webkit-scrollbar-track {
+  background: transparent;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  *,
+  *::before,
+  *::after {
+    animation-duration: 0.001ms !important;
+    animation-iteration-count: 1 !important;
+    transition-duration: 0.001ms !important;
+  }
+}
