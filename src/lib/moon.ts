@@ -29,6 +29,8 @@ export interface MoonInfo {
   phase: PhaseKey;
   /** French phase name */
   nameFr: string;
+  /** English phase name */
+  nameEn: string;
   /** true while waxing (illumination growing) */
   waxing: boolean;
 }
@@ -70,6 +72,21 @@ const PHASE_NAMES: Record<PhaseKey, string> = {
   "dernier-croissant": "dernier croissant",
 };
 
+const PHASE_NAMES_EN: Record<PhaseKey, string> = {
+  nouvelle: "new moon",
+  "premier-croissant": "waxing crescent",
+  "premier-quartier": "first quarter",
+  "gibbeuse-croissante": "waxing gibbous",
+  pleine: "full moon",
+  "gibbeuse-decroissante": "waning gibbous",
+  "dernier-quartier": "last quarter",
+  "dernier-croissant": "waning crescent",
+};
+
+export function moonName(phase: PhaseKey, lang: "fr" | "en"): string {
+  return lang === "en" ? PHASE_NAMES_EN[phase] : PHASE_NAMES[phase];
+}
+
 function phaseFromFraction(f: number): PhaseKey {
   // f in [0,1): 0 new, .25 first quarter, .5 full, .75 last quarter.
   // Narrow windows for the four cardinal phases, wide for the in-betweens.
@@ -103,6 +120,7 @@ export function moonForDate(date: Date): MoonInfo {
     phaseFraction,
     phase,
     nameFr: PHASE_NAMES[phase],
+    nameEn: PHASE_NAMES_EN[phase],
     waxing,
   };
 }

@@ -1,5 +1,16 @@
 import { useMemo, useState } from "react";
-import { KO, SEKKI, SEKKI_BY_ID, koDateRangeFr, sekkiForKo, SEASON_FR, type Ko } from "../data/ko";
+import {
+  KO,
+  SEKKI,
+  SEKKI_BY_ID,
+  koDateRange,
+  koName,
+  sekkiForKo,
+  sekkiName,
+  SEASON_FR,
+  type Ko,
+} from "../data/ko";
+import { useLang } from "../i18n";
 
 // La roue de l'année — an SVG year-wheel. The 72 kō are arranged around a circle
 // (one ring), grouped visually by their 24 sekki and four seasons. Today's kō is
@@ -47,6 +58,7 @@ function segmentPath(startDeg: number, endDeg: number, rIn: number, rOut: number
 }
 
 export function YearWheel({ todayIndex, onPick }: Props) {
+  const { lang, t } = useLang();
   const [hover, setHover] = useState<number | null>(null);
   const [selected, setSelected] = useState<number>(todayIndex);
 
@@ -99,7 +111,7 @@ export function YearWheel({ todayIndex, onPick }: Props) {
                   onPick?.(ko);
                 }}
               >
-                <title>{`${ko.fr} — ${koDateRangeFr(ko)}`}</title>
+                <title>{`${koName(ko, lang)} — ${koDateRange(ko, lang)}`}</title>
               </path>
             );
           })}
@@ -129,7 +141,7 @@ export function YearWheel({ todayIndex, onPick }: Props) {
                   fontFamily="Inter, sans-serif"
                   letterSpacing="0.5"
                 >
-                  {sekki.fr}
+                  {sekkiName(sekki, lang)}
                 </text>
               </g>
             );
@@ -145,7 +157,7 @@ export function YearWheel({ todayIndex, onPick }: Props) {
             fontFamily="Inter, sans-serif"
             letterSpacing="2"
           >
-            {activeSekki.fr.toUpperCase()}
+            {sekkiName(activeSekki, lang).toUpperCase()}
           </text>
           <text
             x={C}
@@ -158,8 +170,8 @@ export function YearWheel({ todayIndex, onPick }: Props) {
           >
             {activeKo.kanji}
           </text>
-          {/* wrap the FR name across lines */}
-          {wrap(activeKo.fr, 22).map((ln, i) => (
+          {/* wrap the active kō name across lines */}
+          {wrap(koName(activeKo, lang), 22).map((ln, i) => (
             <text
               key={i}
               x={C}
@@ -174,20 +186,20 @@ export function YearWheel({ todayIndex, onPick }: Props) {
           ))}
           <text
             x={C}
-            y={C + 26 + wrap(activeKo.fr, 22).length * 18 + 4}
+            y={C + 26 + wrap(koName(activeKo, lang), 22).length * 18 + 4}
             fontSize="11"
             fill="rgb(var(--alm-muted))"
             textAnchor="middle"
             fontFamily="Inter, sans-serif"
           >
-            {koDateRangeFr(activeKo)}
+            {koDateRange(activeKo, lang)}
           </text>
         </svg>
       </div>
 
       <p className="text-center text-sm text-muted max-w-md font-sans">
-        Survolez ou touchez un pétale pour lire son kō.{" "}
-        <span className="text-accent">Aujourd'hui</span> est cerclé.
+        {t("wheel.hint.before")}{" "}
+        <span className="text-accent">{t("wheel.hint.today")}</span> {t("wheel.hint.after")}
       </p>
     </div>
   );

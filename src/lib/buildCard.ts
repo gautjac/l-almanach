@@ -1,42 +1,64 @@
 // Assemble a DailyCard from purely LOCAL facts (kō, moon, phenology, fallback
-// line + word). The AI evocation is layered on later. This guarantees a complete,
-// beautiful card with zero network.
+// line + word), in BOTH languages. The AI evocation (language-specific) is layered
+// on later. This guarantees a complete, beautiful card with zero network, in
+// whichever language the reader chooses.
 
-import { koForDate, sekkiForKo, koDateRangeFr, SEASON_FR } from "../data/ko";
+import {
+  koForDate,
+  sekkiForKo,
+  koDateRangeFr,
+  koDateRangeEn,
+  SEASON_FR,
+  type Lang,
+} from "../data/ko";
 import { moonForDate, illuminationPercent } from "./moon";
 import { phenologyForDate } from "../data/phenology";
 import { lineForKo } from "../data/lines";
 import { isoDate, dayOfYear } from "./dates";
-import type { DailyCard } from "../db";
+import { cardKey, type DailyCard } from "../db";
 
-export function buildLocalCard(date: Date, place: string): DailyCard {
+export function buildLocalCard(date: Date, place: string, lang: Lang): DailyCard {
   const ko = koForDate(date);
   const sekki = sekkiForKo(ko);
   const moon = moonForDate(date);
-  const phen = phenologyForDate(date);
   const seed = dayOfYear(date);
+  const iso = isoDate(date);
 
-  // Compose a sensible Québec phenology fallback sentence.
-  const bloom = phen.blooming[seed % phen.blooming.length];
-  const stir = phen.stirring[seed % phen.stirring.length];
-  const phenologyFallback = `${capitalize(bloom)}. ${capitalize(stir)}.`;
+  // Compose Québec phenology fallback sentences in each language.
+  const phenFr = phenologyForDate(date, "fr");
+  const phenEn = phenologyForDate(date, "en");
+  const phenologyFallbackFr = `${capitalize(phenFr.blooming[seed % phenFr.blooming.length])}. ${capitalize(
+    phenFr.stirring[seed % phenFr.stirring.length],
+  )}.`;
+  const phenologyFallbackEn = `${capitalize(phenEn.blooming[seed % phenEn.blooming.length])}. ${capitalize(
+    phenEn.stirring[seed % phenEn.stirring.length],
+  )}.`;
 
   return {
-    date: isoDate(date),
+    cacheKey: cardKey(iso, lang),
+    lang,
+    date: iso,
     koIndex: ko.index,
     koFr: ko.fr,
+    koEn: ko.en,
     koKanji: ko.kanji,
     koRomaji: ko.romaji,
-    koRange: koDateRangeFr(ko),
+    koRangeFr: koDateRangeFr(ko),
+    koRangeEn: koDateRangeEn(ko),
     sekkiFr: sekki.fr,
-    sekkiGloss: sekki.glossFr,
+    sekkiEn: sekki.en,
+    sekkiGlossFr: sekki.glossFr,
+    sekkiGlossEn: sekki.glossEn,
     sekkiKanji: sekki.kanji,
     season: sekki.season,
-    moonPhase: moon.nameFr,
+    moonPhaseFr: moon.nameFr,
+    moonPhaseEn: moon.nameEn,
     moonPct: illuminationPercent(moon),
     moonFraction: moon.phaseFraction,
-    fallbackLine: lineForKo(ko.index),
-    phenologyFallback,
+    fallbackLineFr: lineForKo(ko.index, "fr"),
+    fallbackLineEn: lineForKo(ko.index, "en"),
+    phenologyFallbackFr,
+    phenologyFallbackEn,
     place,
     createdAt: Date.now(),
   };

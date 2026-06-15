@@ -12,13 +12,20 @@ export interface CardEvocation {
 }
 
 export interface AlmanachRequestBody {
-  koFr: string;
+  /** UI / output language; "en" → the card comes back in English */
+  lang: "fr" | "en";
+  /** kō name in the requested language */
+  koName: string;
   koKanji: string;
-  sekkiFr: string;
+  /** sekki name in the requested language */
+  sekkiName: string;
+  /** sekki gloss in the requested language */
   sekkiGloss: string;
   season: string;
   date: string;
+  /** human date label in the requested language */
   dateLabel: string;
+  /** moon phase name in the requested language */
   moonPhase: string;
   moonPct: number;
   place?: string;
@@ -51,11 +58,11 @@ export async function fetchEvocation(
   }
 
   if (!res.ok) {
-    const msg = parsed?.error ?? `Erreur ${res.status}`;
+    const msg = parsed?.error ?? `Error ${res.status}`;
     throw new Error(msg);
   }
-  if (!parsed) throw new Error("Réponse invalide du serveur.");
+  if (!parsed) throw new Error("Invalid response from the server.");
   if (parsed.error) throw new Error(parsed.error);
   if (parsed.result) return parsed.result;
-  throw new Error("Réponse invalide du serveur.");
+  throw new Error("Invalid response from the server.");
 }

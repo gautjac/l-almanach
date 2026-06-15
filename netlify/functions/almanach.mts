@@ -17,7 +17,9 @@ export default async (req: Request, _context: Context) => {
     return json({ error: "Invalid JSON" }, 400);
   }
 
-  if (!body?.koFr || !body?.sekkiFr) {
+  const koName = body?.koName ?? body?.koFr;
+  const sekkiName = body?.sekkiName ?? body?.sekkiFr;
+  if (!koName || !sekkiName) {
     return json({ error: "Missing kō / sekki." }, 400);
   }
 

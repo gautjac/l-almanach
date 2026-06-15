@@ -3,7 +3,7 @@
 // (or before the API answers). When the API is reachable, Claude refines this to
 // the actual locale; this gives us a graceful, sensible Québec card with no network.
 
-import type { SeasonKey } from "./ko";
+import type { SeasonKey, Lang } from "./ko";
 
 export interface Phenology {
   /** short label, e.g. "Début mai" */
@@ -90,8 +90,85 @@ export const QUEBEC_PHENOLOGY: Record<number, Phenology> = {
   },
 };
 
-export function phenologyForDate(date: Date): Phenology {
-  return QUEBEC_PHENOLOGY[date.getMonth() + 1];
+// English phenology, same Québec / St. Lawrence valley calendar.
+export const QUEBEC_PHENOLOGY_EN: Record<number, Phenology> = {
+  1: {
+    window: "Deep winter",
+    blooming: ["nothing blooms outdoors", "forced amaryllis and hyacinths indoors"],
+    stirring: ["chickadees and grosbeaks at the feeders", "foxes hunting across the snow", "great horned owls calling at night"],
+    note: "The sap sleeps; the light returns slowly.",
+  },
+  2: {
+    window: "Late winter",
+    blooming: ["swelling willow catkins", "snowdrops under shelter"],
+    stirring: ["sugaring season nears, the sap quickens", "snowy owls still out in the fields", "first cardinal song in the mornings"],
+    note: "The days lengthen; the maple readies its run.",
+  },
+  3: {
+    window: "First thaws",
+    blooming: ["coltsfoot along the roadsides", "first crocuses in town"],
+    stirring: ["maple sap running in full", "Canada geese moving north", "squirrels more active", "first loud crows"],
+    note: "The snow melts; sap water sings in the buckets.",
+  },
+  4: {
+    window: "Thaw",
+    blooming: ["coltsfoot, hepatica and bloodroot in the undergrowth", "willows in golden catkins"],
+    stirring: ["robins and red-winged blackbirds return", "spring peepers and wood frogs calling", "bears emerging from hibernation"],
+    note: "The ground reappears; spring ephemerals carpet the woods.",
+  },
+  5: {
+    window: "Full spring",
+    blooming: ["trilliums, starflowers and lily-of-the-valley", "apple trees and lilacs in bloom", "golden dandelions everywhere"],
+    stirring: ["a great wave of migrating warblers", "hummingbirds back", "earthworms at the surface after rain"],
+    note: "The woods close over in green; apple trees snow their petals.",
+  },
+  6: {
+    window: "Early summer",
+    blooming: ["peonies, irises and roses", "clover and daisies in the fields", "milkweed rising"],
+    stirring: ["fireflies in the grass at dusk", "broods of birds learning to fly", "first wild strawberries"],
+    note: "The evening stretches; fireflies open their lanterns.",
+  },
+  7: {
+    window: "High summer",
+    blooming: ["milkweed, coneflowers and sunflowers", "lilies and daylilies", "pink fireweed in the clearings"],
+    stirring: ["monarchs on the milkweed", "cicadas in full chorus", "blueberries ripening up north"],
+    note: "The heat is full; the fields hum with pollinators.",
+  },
+  8: {
+    window: "Late summer",
+    blooming: ["goldenrod and asters opening", "sunflowers at maturity", "hops and vines heavy"],
+    stirring: ["crickets in the evening", "swallows gathering on the wires", "first monarch migrations south"],
+    note: "The evenings cool; the crickets announce the turn.",
+  },
+  9: {
+    window: "Early autumn",
+    blooming: ["asters and goldenrod in abundance", "last roses", "chrysanthemums"],
+    stirring: ["geese gathering in Vs", "squirrels laying in stores", "first color on the maples"],
+    note: "The leaves turn; the air smells of apples and damp earth.",
+  },
+  10: {
+    window: "Full autumn",
+    blooming: ["chrysanthemums and last asters", "squash and pumpkins in the fields"],
+    stirring: ["great departures of geese and ducks", "deer in rut (the bellowing)", "mushrooms after the rains", "first frosts at ground level"],
+    note: "The foliage blazes then falls; frost signs the mornings.",
+  },
+  11: {
+    window: "Late autumn",
+    blooming: ["witch hazel (the last to bloom)", "rowan and hawthorn berries"],
+    stirring: ["bohemian waxwings passing through", "the last loons leaving", "beavers finishing their dams", "the ground beginning to freeze"],
+    note: "The woods go bare; the north wind sweeps the last leaves.",
+  },
+  12: {
+    window: "Early winter",
+    blooming: ["decorative holly and yew", "poinsettias and Christmas cactus indoors"],
+    stirring: ["redpolls and siskins in flocks", "hares already white", "foxes hunting voles under the snow"],
+    note: "The white silence settles; the light reaches its lowest point.",
+  },
+};
+
+export function phenologyForDate(date: Date, lang: Lang = "fr"): Phenology {
+  const m = date.getMonth() + 1;
+  return lang === "en" ? QUEBEC_PHENOLOGY_EN[m] : QUEBEC_PHENOLOGY[m];
 }
 
 // ── Seasonal words — a lovely FR (or world) word for the moment, with a gloss.
@@ -129,7 +206,38 @@ export const SEASONAL_WORDS: Record<SeasonKey, SeasonalWord[]> = {
   ],
 };
 
-export function defaultSeasonalWord(season: SeasonKey, seed: number): SeasonalWord {
-  const list = SEASONAL_WORDS[season];
+export const SEASONAL_WORDS_EN: Record<SeasonKey, SeasonalWord[]> = {
+  printemps: [
+    { word: "renewal", gloss: "the return of life after winter; all that begins again." },
+    { word: "verdure", gloss: "fresh green vegetation; the unfurling of new leaves." },
+    { word: "petrichor", lang: "Greek", gloss: "the scent of earth after the first rain." },
+    { word: "aurora", gloss: "the first light of day; also the very start of a season." },
+  ],
+  ete: [
+    { word: "estival", gloss: "of the summer, of its long slow light." },
+    { word: "dog days", gloss: "the hottest days, under the star of the Great Dog." },
+    { word: "hesperus", lang: "Greek", gloss: "the evening star, Venus at summer dusk." },
+    { word: "komorebi", lang: "Japanese", gloss: "sunlight filtered through leaves." },
+  ],
+  automne: [
+    { word: "Indian summer", gloss: "warm late days after the first frosts." },
+    { word: "saudade", lang: "Portuguese", gloss: "the gentle ache for something past but loved." },
+    { word: "hygge", lang: "Danish", gloss: "the comfort of small pleasures by the hearth." },
+    { word: "leaf-fall", gloss: "the dropping of leaves; the tree letting go." },
+  ],
+  hiver: [
+    { word: "hibernal", gloss: "of winter, of its silence and cold clarity." },
+    { word: "rime", gloss: "the fine frost that whitens branches and windows." },
+    { word: "poudrerie", lang: "Québécois", gloss: "snow lifted and driven by the wind." },
+    { word: "wabi", lang: "Japanese", gloss: "the spare, solitary beauty of bare things." },
+  ],
+};
+
+export function defaultSeasonalWord(
+  season: SeasonKey,
+  seed: number,
+  lang: Lang = "fr",
+): SeasonalWord {
+  const list = lang === "en" ? SEASONAL_WORDS_EN[season] : SEASONAL_WORDS[season];
   return list[seed % list.length];
 }

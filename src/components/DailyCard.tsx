@@ -1,7 +1,8 @@
 import type { DailyCard as Card } from "../db";
 import { MoonIcon } from "./MoonIcon";
 import { SEASON_GLYPH } from "../lib/season";
-import type { SeasonKey } from "../data/ko";
+import { seasonLabel, type SeasonKey } from "../data/ko";
+import { useLang } from "../i18n";
 
 interface Props {
   card: Card;
@@ -16,10 +17,22 @@ interface Props {
 
 // The signature: a calm «aujourd'hui dans l'année». Built entirely from local
 // facts (kō, moon, phenology) with the AI evocation/haiku layered in when ready.
+// Every local fact is shown in the active language; the AI evocation is written
+// in the language the card was fetched for (see card.lang).
 export function DailyCard({ card, loading, error, saved, onSave, onRetry }: Props) {
+  const { lang, t } = useLang();
   const season = card.season as SeasonKey;
   const evo = card.evocation;
-  const haiku = evo?.haiku || card.fallbackLine;
+
+  // Local facts in the active UI language.
+  const ko = lang === "en" ? card.koEn : card.koFr;
+  const koRange = lang === "en" ? card.koRangeEn : card.koRangeFr;
+  const sekki = lang === "en" ? card.sekkiEn : card.sekkiFr;
+  const sekkiG = lang === "en" ? card.sekkiGlossEn : card.sekkiGlossFr;
+  const moonPhase = lang === "en" ? card.moonPhaseEn : card.moonPhaseFr;
+  const fallbackLine = lang === "en" ? card.fallbackLineEn : card.fallbackLineFr;
+  const phenologyFallback = lang === "en" ? card.phenologyFallbackEn : card.phenologyFallbackFr;
+  const haiku = evo?.haiku || fallbackLine;
 
   return (
     <article className="animate-riseIn mx-auto w-full max-w-2xl">
@@ -30,24 +43,24 @@ export function DailyCard({ card, loading, error, saved, onSave, onRetry }: Prop
             <div className="flex items-center gap-2 text-accent">
               <span aria-hidden>{SEASON_GLYPH[season]}</span>
               <span className="font-sans text-xs tracking-widest2 uppercase">
-                {seasonLabel(season)}
+                {seasonLabel(season, lang)}
               </span>
             </div>
             <p className="mt-2 font-sans text-xs text-muted tracking-wide">
-              {card.sekkiKanji} {card.sekkiFr} · {card.sekkiGloss}
+              {card.sekkiKanji} {sekki} · {sekkiG}
             </p>
           </div>
           <button
             onClick={onSave}
             aria-pressed={saved}
-            title={saved ? "Retirer de l'herbier" : "Garder cette carte"}
+            title={saved ? t("card.unsave.title") : t("card.save.title")}
             className={`shrink-0 rounded-full border px-3.5 py-1.5 font-sans text-xs transition-colors ${
               saved
                 ? "border-accent bg-accent text-surface"
                 : "border-line bg-surface text-muted hover:border-accent hover:text-accent"
             }`}
           >
-            {saved ? "gardée ✓" : "garder"}
+            {saved ? t("card.saved") : t("card.save")}
           </button>
         </div>
 
@@ -58,10 +71,10 @@ export function DailyCard({ card, loading, error, saved, onSave, onRetry }: Prop
             <span className="font-sans text-[11px] text-muted italic">{card.koRomaji}</span>
           </div>
           <h1 className="mt-1 font-display text-[34px] leading-[1.08] sm:text-[44px] text-ink">
-            {card.koFr}
+            {ko}
           </h1>
           <p className="mt-2 font-sans text-xs text-muted">
-            le micro-saison du moment · {card.koRange} · n<sup>o</sup> {card.koIndex} / 72
+            {t("card.microSeason")} · {koRange} · n<sup>o</sup> {card.koIndex} {t("card.of72")}
           </p>
         </div>
 
@@ -102,12 +115,14 @@ export function DailyCard({ card, loading, error, saved, onSave, onRetry }: Prop
               <MoonIcon fraction={card.moonFraction} size={52} />
               <div>
                 <p className="font-sans text-[10px] uppercase tracking-widest2 text-muted">
-                  la lune
+                  {t("card.moon")}
                 </p>
                 <p className="font-serif text-lg leading-snug text-ink capitalize">
-                  {card.moonPhase}
+                  {moonPhase}
                 </p>
-                <p className="font-sans text-xs text-muted">{card.moonPct} % éclairée</p>
+                <p className="font-sans text-xs text-muted">
+                  {card.moonPct} {t("card.moon.illuminated")}
+                </p>
               </div>
             </div>
           </div>
@@ -115,7 +130,7 @@ export function DailyCard({ card, loading, error, saved, onSave, onRetry }: Prop
           {/* seasonal word */}
           <div className="bg-surface/80 px-7 sm:px-6 py-6">
             <p className="font-sans text-[10px] uppercase tracking-widest2 text-muted">
-              le mot de saison
+              {t("card.word")}
             </p>
             {evo?.word?.word ? (
               <>
@@ -139,10 +154,10 @@ export function DailyCard({ card, loading, error, saved, onSave, onRetry }: Prop
           {/* phenology */}
           <div className="bg-surface/80 px-7 sm:px-6 py-6">
             <p className="font-sans text-[10px] uppercase tracking-widest2 text-muted">
-              dans la nature
+              {t("card.nature")}
             </p>
             <p className="font-serif text-base leading-snug text-ink/85 mt-1">
-              {evo?.phenologyNote || card.phenologyFallback}
+              {evo?.phenologyNote || phenologyFallback}
             </p>
             <p className="font-sans text-[11px] text-muted mt-2">{card.place}</p>
           </div>
@@ -150,15 +165,13 @@ export function DailyCard({ card, loading, error, saved, onSave, onRetry }: Prop
 
         {error && (
           <div className="px-7 sm:px-10 py-4 bg-surface/80 border-t border-line flex items-center justify-between gap-3">
-            <p className="font-sans text-xs text-muted">
-              L'évocation du jour n'a pu être écrite — la carte reste juste.
-            </p>
+            <p className="font-sans text-xs text-muted">{t("card.error")}</p>
             {onRetry && (
               <button
                 onClick={onRetry}
                 className="shrink-0 font-sans text-xs text-accent hover:underline"
               >
-                réessayer
+                {t("card.retry")}
               </button>
             )}
           </div>
@@ -166,8 +179,4 @@ export function DailyCard({ card, loading, error, saved, onSave, onRetry }: Prop
       </div>
     </article>
   );
-}
-
-function seasonLabel(s: SeasonKey): string {
-  return { printemps: "printemps", ete: "été", automne: "automne", hiver: "hiver" }[s];
 }

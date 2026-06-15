@@ -18,14 +18,17 @@ import {
 } from "./db";
 import { buildLocalCard } from "./lib/buildCard";
 import { applyPalette } from "./lib/season";
-import { fullDateFr, dateLabelFr } from "./lib/dates";
-import type { SeasonKey, Ko } from "./data/ko";
-import { koDateRangeFr, sekkiForKo } from "./data/ko";
+import { fullDate, dateLabel } from "./lib/dates";
+import type { SeasonKey, Ko, Lang } from "./data/ko";
+import { koDateRange, koName, sekkiForKo, sekkiName, sekkiGloss } from "./data/ko";
 import { lineForKo } from "./data/lines";
+import { useLang } from "./i18n";
+import type { DictKey } from "./i18n/dict";
 
 type View = "today" | "wheel" | "archive";
 
 export default function App() {
+  const { lang, toggle, t, ready } = useLang();
   const [settings, setSettings] = useState<Settings | null>(null);
   const [view, setView] = useState<View>("today");
   const [card, setCard] = useState<Card | null>(null);
@@ -33,6 +36,7 @@ export default function App() {
   const [error, setError] = useState<string | null>(null);
   const [savedRow, setSavedRow] = useState<SavedCard | undefined>(undefined);
   const [peek, setPeek] = useState<Ko | null>(null);
+  // tracks which "date|lang" we've kicked an evocation fetch for
   const fetchedFor = useRef<string | null>(null);
 
   // ── boot: load settings ──────────────────────────────────────────────
@@ -41,39 +45,43 @@ export default function App() {
   }, []);
 
   // ── resolve place (geolocation optional, Québec default) ─────────────
-  const resolvePlace = useCallback(async (s: Settings): Promise<string> => {
-    if (s.locationMode === "auto") {
-      if (s.placeLabel && s.placeLabel !== "Québec") return s.placeLabel;
-      // Attempt geolocation (graceful: fall back to Québec).
-      try {
-        const pos = await new Promise<GeolocationPosition>((res, rej) => {
-          if (!navigator.geolocation) return rej(new Error("no geo"));
-          navigator.geolocation.getCurrentPosition(res, rej, {
-            timeout: 6000,
-            maximumAge: 86400000,
+  const resolvePlace = useCallback(
+    async (s: Settings): Promise<string> => {
+      const defaultPlace = t("loc.defaultPlace");
+      if (s.locationMode === "auto") {
+        if (s.placeLabel && s.placeLabel !== "Québec") return s.placeLabel;
+        // Attempt geolocation (graceful: fall back to Québec).
+        try {
+          const pos = await new Promise<GeolocationPosition>((res, rej) => {
+            if (!navigator.geolocation) return rej(new Error("no geo"));
+            navigator.geolocation.getCurrentPosition(res, rej, {
+              timeout: 6000,
+              maximumAge: 86400000,
+            });
           });
-        });
-        const { latitude, longitude } = pos.coords;
-        const label = await reverseGeocode(latitude, longitude);
-        await saveSettings({ lat: latitude, lon: longitude, placeLabel: label });
-        return label;
-      } catch {
-        return s.placeLabel || "Québec";
+          const { latitude, longitude } = pos.coords;
+          const label = await reverseGeocode(latitude, longitude, lang, t("loc.yourRegion"));
+          await saveSettings({ lat: latitude, lon: longitude, placeLabel: label });
+          return label;
+        } catch {
+          return s.placeLabel || defaultPlace;
+        }
       }
-    }
-    return "Québec";
-  }, []);
+      return defaultPlace;
+    },
+    [lang, t],
+  );
 
-  // ── build today's card (local) + apply palette + cache ───────────────
+  // ── build today's card (local) + apply palette + cache (per language) ─
   const loadToday = useCallback(
-    async (s: Settings) => {
+    async (s: Settings, l: Lang) => {
       const now = new Date();
       const place = await resolvePlace(s);
-      const fresh = buildLocalCard(now, place);
+      const fresh = buildLocalCard(now, place, l);
       applyPalette(fresh.season as SeasonKey);
 
-      // Prefer a cached card for the day so it's stable; keep its place fresh.
-      const cached = await getCachedCard(fresh.date);
+      // Prefer a cached card for the day+language so it's stable; keep place fresh.
+      const cached = await getCachedCard(fresh.date, l);
       let working: Card;
       if (cached) {
         working = { ...cached, place };
@@ -84,9 +92,10 @@ export default function App() {
       setCard(working);
       setSavedRow(await isDateSaved(working.date));
 
-      // Fetch the AI evocation once per day (if not cached already).
-      if (!working.evocation && fetchedFor.current !== working.date) {
-        fetchedFor.current = working.date;
+      // Fetch the AI evocation once per day+language (if not cached already).
+      const key = `${working.date}|${l}`;
+      if (!working.evocation && fetchedFor.current !== key) {
+        fetchedFor.current = key;
         void fetchEvocationFor(working);
       }
     },
@@ -98,31 +107,33 @@ export default function App() {
     setError(null);
     try {
       const evo = await fetchEvocation({
-        koFr: working.koFr,
+        lang: working.lang,
+        koName: working.lang === "en" ? working.koEn : working.koFr,
         koKanji: working.koKanji,
-        sekkiFr: working.sekkiFr,
-        sekkiGloss: working.sekkiGloss,
+        sekkiName: working.lang === "en" ? working.sekkiEn : working.sekkiFr,
+        sekkiGloss: working.lang === "en" ? working.sekkiGlossEn : working.sekkiGlossFr,
         season: working.season,
         date: working.date,
-        dateLabel: dateLabelFr(new Date(working.date + "T12:00:00")),
-        moonPhase: working.moonPhase,
+        dateLabel: dateLabel(new Date(working.date + "T12:00:00"), working.lang),
+        moonPhase: working.lang === "en" ? working.moonPhaseEn : working.moonPhaseFr,
         moonPct: working.moonPct,
         place: working.place,
       });
       const updated: Card = { ...working, evocation: evo };
       await putCachedCard(updated);
-      setCard((c) => (c && c.date === updated.date ? updated : c));
+      setCard((c) => (c && c.cacheKey === updated.cacheKey ? updated : c));
     } catch (err) {
-      setError(err instanceof Error ? err.message : "Erreur inconnue");
+      setError(err instanceof Error ? err.message : t("err.unknown"));
       fetchedFor.current = null; // allow retry
     } finally {
       setLoading(false);
     }
-  }, []);
+  }, [t]);
 
+  // (re)load when settings or language change
   useEffect(() => {
-    if (settings?.onboarded) void loadToday(settings);
-  }, [settings, loadToday]);
+    if (settings?.onboarded && ready) void loadToday(settings, lang);
+  }, [settings, lang, ready, loadToday]);
 
   // ── onboarding completion ────────────────────────────────────────────
   const finishOnboarding = useCallback(
@@ -141,7 +152,7 @@ export default function App() {
       await unsaveCard(savedRow.id);
       setSavedRow(undefined);
     } else {
-      const latest = (await getCachedCard(card.date)) ?? card;
+      const latest = (await getCachedCard(card.date, card.lang)) ?? card;
       await saveCard(latest);
       setSavedRow(await isDateSaved(card.date));
     }
@@ -150,7 +161,7 @@ export default function App() {
   // ── retry the evocation ──────────────────────────────────────────────
   const retry = useCallback(() => {
     if (card) {
-      fetchedFor.current = card.date;
+      fetchedFor.current = `${card.date}|${card.lang}`;
       void fetchEvocationFor(card);
     }
   }, [card, fetchEvocationFor]);
@@ -167,10 +178,10 @@ export default function App() {
     setSettings(s);
     fetchedFor.current = null;
     setError(null);
-    await loadToday(s);
-  }, [settings, loadToday]);
+    await loadToday(s, lang);
+  }, [settings, lang, loadToday]);
 
-  if (!settings) return <BootSplash />;
+  if (!settings || !ready) return <BootSplash />;
   if (!settings.onboarded) return <Onboarding onDone={finishOnboarding} />;
 
   return (
@@ -178,10 +189,13 @@ export default function App() {
       <Header
         view={view}
         setView={setView}
-        place={card?.place ?? "Québec"}
+        place={card?.place ?? t("loc.defaultPlace")}
         locationMode={settings.locationMode}
         onToggleLocation={toggleLocation}
-        dateLabel={card ? fullDateFr(new Date(card.date + "T12:00:00")) : ""}
+        dateLabel={card ? fullDate(new Date(card.date + "T12:00:00"), lang) : ""}
+        lang={lang}
+        onToggleLang={toggle}
+        t={t}
       />
 
       <main className="flex-1 px-4 sm:px-6 pb-16 pt-4">
@@ -201,10 +215,8 @@ export default function App() {
         {view === "wheel" && card && (
           <div className="mx-auto max-w-2xl pt-4 animate-fadeIn">
             <div className="text-center mb-4">
-              <h2 className="font-display text-2xl text-ink">La roue de l'année</h2>
-              <p className="font-serif text-lg text-ink/70">
-                Les 24 sekki, leurs 72 kō, tout autour du cercle.
-              </p>
+              <h2 className="font-display text-2xl text-ink">{t("wheel.title")}</h2>
+              <p className="font-serif text-lg text-ink/70">{t("wheel.subtitle")}</p>
             </div>
             <YearWheel todayIndex={card.koIndex} onPick={setPeek} />
           </div>
@@ -223,9 +235,9 @@ export default function App() {
         )}
       </main>
 
-      <Footer />
+      <Footer t={t} />
 
-      {peek && <KoPeek ko={peek} onClose={() => setPeek(null)} />}
+      {peek && <KoPeek ko={peek} onClose={() => setPeek(null)} lang={lang} />}
     </div>
   );
 }
@@ -238,6 +250,9 @@ function Header({
   locationMode,
   onToggleLocation,
   dateLabel,
+  lang,
+  onToggleLang,
+  t,
 }: {
   view: View;
   setView: (v: View) => void;
@@ -245,11 +260,14 @@ function Header({
   locationMode: "quebec" | "auto";
   onToggleLocation: () => void;
   dateLabel: string;
+  lang: Lang;
+  onToggleLang: () => void;
+  t: (k: DictKey) => string;
 }) {
-  const tabs: { id: View; label: string }[] = [
-    { id: "today", label: "aujourd'hui" },
-    { id: "wheel", label: "la roue" },
-    { id: "archive", label: "l'herbier" },
+  const tabs: { id: View; key: DictKey }[] = [
+    { id: "today", key: "nav.today" },
+    { id: "wheel", key: "nav.wheel" },
+    { id: "archive", key: "nav.archive" },
   ];
   return (
     <header className="sticky top-0 z-20 border-b border-line bg-bg/85 backdrop-blur-md">
@@ -258,49 +276,57 @@ function Header({
           onClick={() => setView("today")}
           className="flex items-baseline gap-2 text-left"
         >
-          <span className="font-display text-xl text-ink tracking-tight">L'Almanach</span>
+          <span className="font-display text-xl text-ink tracking-tight">{t("app.name")}</span>
           <span className="hidden sm:inline font-serif text-sm text-muted italic">
             {dateLabel}
           </span>
         </button>
         <nav className="flex items-center gap-1">
-          {tabs.map((t) => (
+          {tabs.map((tab) => (
             <button
-              key={t.id}
-              onClick={() => setView(t.id)}
+              key={tab.id}
+              onClick={() => setView(tab.id)}
               className={`rounded-full px-3 py-1.5 font-sans text-xs transition-colors ${
-                view === t.id
+                view === tab.id
                   ? "bg-accent text-surface"
                   : "text-muted hover:text-ink"
               }`}
             >
-              {t.label}
+              {t(tab.key)}
             </button>
           ))}
+          <button
+            onClick={onToggleLang}
+            title={t("lang.toggle.title")}
+            aria-label={t("lang.toggle.title")}
+            className="ml-1 rounded-full border border-line px-2.5 py-1.5 font-sans text-[11px] font-medium tracking-wide text-muted hover:border-accent hover:text-accent transition-colors"
+          >
+            <span className={lang === "fr" ? "text-accent" : ""}>FR</span>
+            <span className="mx-1 text-line">/</span>
+            <span className={lang === "en" ? "text-accent" : ""}>EN</span>
+          </button>
         </nav>
       </div>
       <div className="mx-auto max-w-3xl px-4 sm:px-6 pb-2 -mt-1 flex justify-end">
         <button
           onClick={onToggleLocation}
-          title="Changer le lieu"
+          title={t("loc.change.title")}
           className="font-sans text-[11px] text-muted hover:text-accent transition-colors"
         >
           {locationMode === "auto" ? "📍 " : ""}
           {place} ·{" "}
-          {locationMode === "auto" ? "ma position" : "Québec par défaut"}
+          {locationMode === "auto" ? t("loc.myPosition") : t("loc.quebecDefault")}
         </button>
       </div>
     </header>
   );
 }
 
-function Footer() {
+function Footer({ t }: { t: (k: DictKey) => string }) {
   return (
     <footer className="border-t border-line py-6 px-6">
       <p className="mx-auto max-w-2xl text-center font-sans text-[11px] leading-relaxed text-muted">
-        Le kō du jour et la phase de la lune sont calculés sur votre appareil, hors
-        ligne, à partir de la date. L'évocation, le mot et le haïku sont écrits pour le
-        jour. Soixante-douze micro-saisons, l'année qui tourne.
+        {t("footer.note")}
       </p>
     </footer>
   );
@@ -318,9 +344,17 @@ function BootSplash() {
 }
 
 // ── A modal that reads a single kō picked from the wheel ───────────────────
-function KoPeek({ ko, onClose }: { ko: Ko; onClose: () => void }) {
+function KoPeek({
+  ko,
+  onClose,
+  lang,
+}: {
+  ko: Ko;
+  onClose: () => void;
+  lang: Lang;
+}) {
   const sekki = sekkiForKo(ko);
-  const line = lineForKo(ko.index);
+  const line = lineForKo(ko.index, lang);
   return (
     <div
       className="fixed inset-0 z-40 flex items-center justify-center bg-ink/30 backdrop-blur-sm p-5 animate-fadeIn"
@@ -332,12 +366,12 @@ function KoPeek({ ko, onClose }: { ko: Ko; onClose: () => void }) {
       >
         <div className="flex items-center justify-between">
           <span className="font-sans text-[10px] uppercase tracking-widest2 text-accent">
-            {sekki.kanji} {sekki.fr} · {sekki.glossFr}
+            {sekki.kanji} {sekkiName(sekki, lang)} · {sekkiGloss(sekki, lang)}
           </span>
           <button
             onClick={onClose}
             className="text-muted hover:text-ink font-sans text-sm"
-            aria-label="Fermer"
+            aria-label={lang === "en" ? "Close" : "Fermer"}
           >
             ✕
           </button>
@@ -346,9 +380,9 @@ function KoPeek({ ko, onClose }: { ko: Ko; onClose: () => void }) {
           <span className="font-serif text-xl text-ink/60">{ko.kanji}</span>
           <span className="font-sans text-[11px] italic text-muted">{ko.romaji}</span>
         </div>
-        <h3 className="mt-1 font-display text-3xl leading-tight text-ink">{ko.fr}</h3>
+        <h3 className="mt-1 font-display text-3xl leading-tight text-ink">{koName(ko, lang)}</h3>
         <p className="mt-1 font-sans text-xs text-muted">
-          {koDateRangeFr(ko)} · n<sup>o</sup> {ko.index} / 72
+          {koDateRange(ko, lang)} · n<sup>o</sup> {ko.index} / 72
         </p>
         {line && (
           <p className="haiku mt-5 border-l-2 border-accent/50 pl-4 text-lg italic text-ink/80">
@@ -361,10 +395,15 @@ function KoPeek({ ko, onClose }: { ko: Ko; onClose: () => void }) {
 }
 
 // ── lightweight reverse-geocode via open, key-less endpoint; graceful on fail ─
-async function reverseGeocode(lat: number, lon: number): Promise<string> {
+async function reverseGeocode(
+  lat: number,
+  lon: number,
+  lang: Lang,
+  fallback: string,
+): Promise<string> {
   try {
     const res = await fetch(
-      `https://nominatim.openstreetmap.org/reverse?format=jsonv2&lat=${lat}&lon=${lon}&zoom=8&accept-language=fr`,
+      `https://nominatim.openstreetmap.org/reverse?format=jsonv2&lat=${lat}&lon=${lon}&zoom=8&accept-language=${lang}`,
       { headers: { Accept: "application/json" } },
     );
     if (!res.ok) throw new Error("geocode");
@@ -372,8 +411,8 @@ async function reverseGeocode(lat: number, lon: number): Promise<string> {
     const a = j.address ?? {};
     const town = a.city || a.town || a.village || a.county || a.state || "";
     const region = a.state && a.state !== town ? a.state : a.country || "";
-    return [town, region].filter(Boolean).join(", ") || "votre région";
+    return [town, region].filter(Boolean).join(", ") || fallback;
   } catch {
-    return "votre région";
+    return fallback;
   }
 }
